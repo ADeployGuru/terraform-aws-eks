@@ -16,6 +16,7 @@ locals {
 
   create_outposts_local_cluster    = length(var.outpost_config) > 0
   enable_cluster_encryption_config = length(var.cluster_encryption_config) > 0 && !local.create_outposts_local_cluster
+  auto_mode_enabled                = try(var.cluster_compute_config.enabled, false)
 }
 
 ################################################################################
@@ -38,14 +39,42 @@ resource "aws_eks_cluster" "this" {
     public_access_cidrs     = var.cluster_endpoint_public_access_cidrs
   }
 
+  dynamic "compute_config" {
+    for_each = length(var.cluster_compute_config) > 0 ? [var.cluster_compute_config] : []
+
+    content {
+      enabled       = local.auto_mode_enabled
+      node_pools    = local.auto_mode_enabled ? try(compute_config.value.node_pools, []) : null
+      node_role_arn = local.auto_mode_enabled && length(try(compute_config.value.node_pools, [])) > 0 ? try(compute_config.value.node_role_arn, aws_iam_role.eks_auto[0].arn, null) : null
+    }
+  }
+
   dynamic "kubernetes_network_config" {
     # Not valid on Outposts
     for_each = local.create_outposts_local_cluster ? [] : [1]
 
     content {
+      dynamic "elastic_load_balancing" {
+        for_each = local.auto_mode_enabled ? [1] : []
+
+        content {
+          enabled = local.auto_mode_enabled
+        }
+      }
+
       ip_family         = var.cluster_ip_family
       service_ipv4_cidr = var.cluster_service_ipv4_cidr
       service_ipv6_cidr = var.cluster_service_ipv6_cidr
+    }
+  }
+
+  dynamic "storage_config" {
+    for_each = local.auto_mode_enabled ? [1] : []
+
+    content {
+      block_storage {
+        enabled = local.auto_mode_enabled
+      }
     }
   }
 

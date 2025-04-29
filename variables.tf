@@ -609,3 +609,9 @@ variable "aws_auth_accounts" {
   type        = list(any)
   default     = []
 }
+
+variable "cluster_compute_config" {
+  description = "Configuration block for the cluster compute configuration"
+  type        = any
+  default     = {}
+}
